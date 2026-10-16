@@ -1,0 +1,6 @@
+build*/
+profiles/
+.cache/
+compile_commands.json
+*.nsys-rep
+*.ncu-rep
