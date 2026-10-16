@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Compile everything on a free CPU runner. Catches build errors without a GPU.
+  build:
+    runs-on: ubuntu-latest
+    container: nvidia/cuda:12.6.3-devel-ubuntu24.04
+    steps:
+      - name: Install build tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends cmake ninja-build git ca-certificates
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_CUDA_ARCHITECTURES="75;80;86;89;90"
+      - name: Build
+        run: cmake --build build
+
+  # Run the tests on a GPU. Enabled once the GPU_RUNNER repository variable is set
+  # to the runner label (e.g. a GitHub GPU larger runner or a self-hosted runner).
+  test-gpu:
+    needs: build
+    if: >-
+      vars.GPU_RUNNER != '' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ${{ vars.GPU_RUNNER }}
+    container:
+      image: nvidia/cuda:12.6.3-devel-ubuntu24.04
+      options: --gpus all
+    steps:
+      - name: Install build tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends cmake ninja-build git ca-certificates
+      - uses: actions/checkout@v4
+      - name: Show GPU
+        run: nvidia-smi
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCUDL_BUILD_BENCH=OFF
+      - name: Build
+        run: cmake --build build
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Memory check
+        run: compute-sanitizer --error-exitcode=1 build/tests/cudl_tests

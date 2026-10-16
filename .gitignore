@@ -4,3 +4,7 @@ profiles/
 compile_commands.json
 *.nsys-rep
 *.ncu-rep
+.local/
+.vscode/
+.idea/
+.DS_Store
