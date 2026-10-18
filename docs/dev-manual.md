@@ -2,6 +2,21 @@
 
 Notes on extending, debugging and profiling cuDL. Building and running are in the [README](../README.md).
 
+- [Adding a kernel](#adding-a-kernel)
+  - [Kernel file layout](#kernel-file-layout)
+  - [Variant axes](#variant-axes)
+  - [Adding an elementwise op](#adding-an-elementwise-op)
+  - [Reductions](#reductions)
+- [Determinism and drift](#determinism-and-drift)
+- [Choosing a variant at run time](#choosing-a-variant-at-run-time)
+- [Building without a GPU](#building-without-a-gpu)
+- [Running on Slurm](#running-on-slurm)
+- [Debugging](#debugging)
+- [Profiling](#profiling)
+- [Benchmarking](#benchmarking)
+  - [Options](#options)
+- [Code style](#code-style)
+
 ## Adding a kernel
 
 Kernels take raw device pointers and sizes, not Tensors. Every variant of an op shares one launcher signature, so tests and benchmarks can loop over all of them.
@@ -97,6 +112,29 @@ On a machine without a GPU (e.g. a cluster login node), CMake can't detect the G
 ```sh
 cmake -S . -B build -DCMAKE_CUDA_ARCHITECTURES=80
 ```
+
+## Running on Slurm
+
+`scripts/slurm/` has batch scripts for the tests, benchmarks and profiler. Each one requests one V100 on `gpu-sm`. Build on the login node first (the configure step downloads GoogleTest, and compute nodes may be offline):
+
+```sh
+module load gcc/9.2.0 cmake/3.24.3 cuda12.3/toolkit/12.3.2
+cmake -S . -B build -DCMAKE_CUDA_ARCHITECTURES=70
+cmake --build build -j
+```
+
+Then submit with `sbatch`, from any directory. The job runs from the root of the repo the script is in, and its output (stdout and stderr) goes to `scripts/slurm/logs/<job-name>-<jobid>.out`:
+
+```sh
+sbatch scripts/slurm/test.sbatch                    # extra args go to ctest
+sbatch scripts/slurm/bench.sbatch --load vec4       # extra args go to every bench binary
+sbatch scripts/slurm/profile.sbatch nsys build/bench/bench_copy --iters 20
+sbatch -t 02:00:00 -p gpu scripts/slurm/bench.sbatch   # sbatch options go before the script
+```
+
+`#SBATCH` lines can't use variables and Slurm runs a copy of the job script, so each script finds the original through `scontrol show job` and `env.sh` redirects the output itself. If a job fails before that point, its error is in `slurm-<jobid>.out` in the directory you submitted from.
+
+Benchmark JSON goes to `results/` and profiler reports to `profiles/`. A job runs whatever is in `build/` when it starts, so rebuild before submitting. For an interactive GPU shell, use `srun -A spiralfreeprj --qos=free -p gpu-sm --gres=gpu:1 --pty bash`.
 
 ## Debugging
 

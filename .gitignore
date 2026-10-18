@@ -8,3 +8,8 @@ compile_commands.json
 .vscode/
 .idea/
 .DS_Store
+
+
+# Slurm
+scripts/slurm/logs/
+results/
