@@ -210,7 +210,7 @@ __global__ void reduce_rows_warp_kernel(Op op, const float* __restrict__ in, flo
                                         size_t cols) {
     const unsigned lane = threadIdx.x % K_WARP;
     const size_t num_warp = static_cast<size_t>(gridDim.x) * blockDim.x / K_WARP;
-    for (size_t r = (static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x) / K_WARP; r < rows; r += warps) {
+    for (size_t r = (static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x) / K_WARP; r < rows; r += num_warp) {
         const float* row = in + r * cols;
         float acc = Op::identity();
         for (size_t c = lane; c < cols; c += K_WARP) {
