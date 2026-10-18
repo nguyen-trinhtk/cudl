@@ -40,6 +40,8 @@ Benchmark:
 
 ```sh
 build/bench/bench_copy
+build/bench/bench_elementwise
+build/bench/bench_reduce
 ```
 
 To build on a machine without a GPU (e.g. a cluster login node), see [Building without a GPU](docs/dev-manual.md#building-without-a-gpu). 

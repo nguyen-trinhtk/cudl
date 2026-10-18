@@ -1,5 +1,3 @@
-#include <cstdint>
-
 #include "cudl/core/error.h"
 #include "cudl/kernels/copy.h"
 #include "cudl/kernels/registry.h"
@@ -8,49 +6,57 @@
 namespace cudl::kernels {
 namespace {
 
-constexpr int kBlock = 256;
+constexpr int K_BLOCK = K_DEFAULT_BLOCK;  // num threads per block
 
-__global__ void copy_naive_kernel(const float* __restrict__ src, float* __restrict__ dst, size_t n) {
-    const size_t stride = static_cast<size_t>(gridDim.x) * blockDim.x;
-    for (size_t i = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x; i < n; i += stride) dst[i] = src[i];
-}
+// ---- Kernels ----
 
-// src and dst must be 16-byte aligned. The last n % 4 elements are copied by the first threads.
-__global__ void copy_vec4_kernel(const float4* __restrict__ src, float4* __restrict__ dst, size_t n) {
-    const size_t n4 = n / 4;
+// Vec4: src and dst must be 16-byte aligned. The last n % 4 elements are copied by the first threads.
+template <Load L>
+__global__ void copy_kernel(const float* __restrict__ src, float* __restrict__ dst, size_t n) {
     const size_t tid = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
     const size_t stride = static_cast<size_t>(gridDim.x) * blockDim.x;
-    for (size_t i = tid; i < n4; i += stride) dst[i] = src[i];
+    if constexpr (L == Load::Vec4) {
+        const float4* src4 = reinterpret_cast<const float4*>(src);
+        float4* dst4 = reinterpret_cast<float4*>(dst);
+        const size_t n4 = n / 4;
+        for (size_t i = tid; i < n4; i += stride) dst4[i] = src4[i];
 
-    const size_t tail = n - n4 * 4;
-    if (tid < tail) {
-        reinterpret_cast<float*>(dst)[n4 * 4 + tid] = reinterpret_cast<const float*>(src)[n4 * 4 + tid];
+        const size_t tail = n - n4 * 4;
+        if (tid < tail) {
+            dst[n4 * 4 + tid] = src[n4 * 4 + tid];
+        }
+    } else {
+        for (size_t i = tid; i < n; i += stride) dst[i] = src[i];
     }
 }
 
-bool aligned16(const void* p) { return reinterpret_cast<std::uintptr_t>(p) % 16 == 0; }
+// ---- Host helpers ----
+
+// Launch the Load instantiation picked at run time
+void launch_copy(Load l, const float* src, float* dst, size_t n, cudaStream_t stream) {
+    const unsigned grid = grid_size(work_items(n, l), K_BLOCK);
+    if (l == Load::Vec4) {
+        copy_kernel<Load::Vec4><<<grid, K_BLOCK, 0, stream>>>(src, dst, n);
+    } else {
+        copy_kernel<Load::Scalar><<<grid, K_BLOCK, 0, stream>>>(src, dst, n);
+    }
+    CUDL_KERNEL_CHECK();
+}
+
+// ---- Launchers (registry signatures) ----
+
+template <Load L>
+void copy(const float* src, float* dst, size_t n, cudaStream_t stream) {
+    if (n == 0) return;
+    // use vec4 kernel only if data is 16byte aligned
+    const bool vec4 = (L == Load::Vec4 && aligned16(src) && aligned16(dst));
+    launch_copy(vec4 ? Load::Vec4 : Load::Scalar, src, dst, n, stream);
+}
 }  // namespace
 
-void copy_naive(const float* src, float* dst, size_t n, cudaStream_t stream) {
-    if (n == 0) return;
-    copy_naive_kernel<<<grid_size(n, kBlock), kBlock, 0, stream>>>(src, dst, n);
-    CUDL_KERNEL_CHECK();
-}
-
-void copy_vec4(const float* src, float* dst, size_t n, cudaStream_t stream) {
-    if (n == 0) return;
-    if (!aligned16(src) || !aligned16(dst)) {
-        copy_naive(src, dst, n, stream);
-        return;
-    }
-    copy_vec4_kernel<<<grid_size((n + 3) / 4, kBlock), kBlock, 0, stream>>>(reinterpret_cast<const float4*>(src),
-                                                                            reinterpret_cast<float4*>(dst), n);
-    CUDL_KERNEL_CHECK();
-}
+// ---- Registration ----
 
 void register_copy_kernels() {
-    auto& r = detail::raw_registry<CopyFn>();
-    r.add({"copy", "naive", &copy_naive});
-    r.add({"copy", "vec4", &copy_vec4});
+    add_loads(detail::raw_registry<CopyFn>(), "copy", "", &copy<Load::Scalar>, &copy<Load::Vec4>);
 }
 }  // namespace cudl::kernels

@@ -12,20 +12,39 @@
 // Kernel registry
 namespace cudl::kernels {
 
-// One implementation of an op
+// Load axis names (match enum class Load in src/kernels/launch_utils.h)
+inline constexpr const char* kLoadScalar = "scalar";
+inline constexpr const char* kLoadVec4 = "vec4";
+
+// One implementation of an op, identified by three independent axes:
+//   op:   what is computed ("sum", "relu", ...)
+//   algo: how it is computed ("atomic", "smem", "warp", ...); empty if the op has no algorithm axis
+//   load: how each thread reads memory (kLoadScalar or kLoadVec4)
+// Strings rather than enums so one registry type serves every op and benchmarks can filter on them.
 template <typename Fn>
 struct KernelEntry {
-    // TODO: should these be string or enum type?
     std::string op;
-    std::string variant;
-    Fn fn;                      // launcher as a function obj
+    std::string algo;
+    std::string load = kLoadScalar;
+    Fn fn = nullptr;            // launcher as a function obj
     bool deterministic = true;  // Note: should be false for kernels whose results depend on atomics ordering
+    std::string variant{};      // unique name within the op, set by Registry::add (see variant_name)
 };
+
+// Variant name from the algo and load axes:
+//   algo, scalar -> "algo"     algo, vec4 -> "algo_vec4"
+//   no algo      -> the load name ("scalar" / "vec4")
+inline std::string variant_name(const std::string& algo, const std::string& load) {
+    if (algo.empty()) return load;
+    return load == kLoadScalar ? algo : algo + "_" + load;
+}
 
 template <typename Fn>
 class Registry {
 public:
     void add(KernelEntry<Fn> entry) {
+        CUDL_CHECK(!entry.load.empty(), "kernel " << entry.op << " has no load axis");
+        entry.variant = variant_name(entry.algo, entry.load);
         auto& list = by_op_[entry.op];
         for (const auto& e : list)
             CUDL_CHECK(e.variant != entry.variant, "duplicate kernel " << entry.op << "/" << entry.variant);

@@ -31,14 +31,14 @@ int main(int argc, char** argv) {
         const std::string shape = std::to_string(n);
 
         for (const auto& k : kernels::registry<kernels::CopyFn>().entries("copy")) {
-            const auto r = harness.run("copy", k.variant, shape, bytes, 0.0, [&](cudaStream_t s) {
+            const auto r = harness.run("copy", k, shape, bytes, 0.0, [&](cudaStream_t s) {
                 k.fn(src.data<float>(), dst.data<float>(), static_cast<size_t>(n), s);
             });
-            if (n == sizes[2]) best_pct_largest = std::max(best_pct_largest, r.pct_peak_bw());
+            if (r && n == sizes[2]) best_pct_largest = std::max(best_pct_largest, r->pct_peak_bw());
         }
 
         // Practical ceiling to compare against.
-        harness.run("copy", "cudaMemcpy", shape, bytes, 0.0, [&](cudaStream_t s) {
+        harness.run_baseline("copy", "cudaMemcpy", shape, bytes, 0.0, [&](cudaStream_t s) {
             CUDA_CHECK(
                 cudaMemcpyAsync(dst.data<float>(), src.data<float>(), src.nbytes(), cudaMemcpyDeviceToDevice, s));
         });

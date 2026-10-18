@@ -13,7 +13,9 @@ target_link_libraries(cudl_testing PUBLIC cudl GTest::gtest)
 
 add_executable(cudl_tests
     test_tensor.cpp
-    test_copy.cpp)
+    test_copy.cpp
+    test_elementwise.cpp
+    test_reduce.cpp)
 target_link_libraries(cudl_tests PRIVATE cudl_testing GTest::gtest_main)
 
 include(GoogleTest)

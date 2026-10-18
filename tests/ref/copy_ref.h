@@ -6,7 +6,5 @@
 #include <vector>
 
 namespace cudl::ref {
-
 inline std::vector<double> copy(const std::vector<float>& src) { return {src.begin(), src.end()}; }
-
 }  // namespace cudl::ref

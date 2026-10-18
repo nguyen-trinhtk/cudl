@@ -17,7 +17,12 @@ namespace cudl::bench {
 namespace {
 
 [[noreturn]] void usage(const char* prog, int code) {
-    std::fprintf(code ? stderr : stdout, "usage: %s [--warmup N] [--iters N] [--flush-l2] [--json PATH]\n", prog);
+    std::fprintf(code ? stderr : stdout,
+                 "usage: %s [--warmup N] [--iters N] [--flush-l2] [--json PATH]\n"
+                 "          [--op REGEX] [--algo REGEX] [--load REGEX]\n"
+                 "  --op/--algo/--load keep only kernels whose op / algo / load name fully matches\n"
+                 "  (load is scalar or vec4; algo is empty for ops without one, e.g. elementwise)\n",
+                 prog);
     std::exit(code);
 }
 
@@ -66,6 +71,12 @@ Options Options::parse(int argc, char** argv) {
             o.flush_l2 = true;
         else if (arg == "--json")
             o.json_path = value();
+        else if (arg == "--op")
+            o.op_filter = value();
+        else if (arg == "--algo")
+            o.algo_filter = value();
+        else if (arg == "--load")
+            o.load_filter = value();
         else if (arg == "-h" || arg == "--help")
             usage(argv[0], 0);
         else {
@@ -103,6 +114,13 @@ double Result::pct_peak_bw() const {
 }
 
 Harness::Harness(Options opts) : opts_(std::move(opts)) {
+    try {
+        op_re_ = std::regex(opts_.op_filter.empty() ? ".*" : opts_.op_filter);
+        algo_re_ = std::regex(opts_.algo_filter.empty() ? ".*" : opts_.algo_filter);
+        load_re_ = std::regex(opts_.load_filter.empty() ? ".*" : opts_.load_filter);
+    } catch (const std::regex_error& e) {
+        CUDL_FAIL("bad --op/--algo/--load regex: " << e.what());
+    }
     if (opts_.flush_l2) {
         flush_bytes_ = std::max<size_t>(2 * DeviceInfo::get().l2_bytes, size_t{1} << 20);
         CUDA_CHECK(cudaMalloc(&flush_buf_, flush_bytes_));
@@ -117,9 +135,17 @@ Harness::~Harness() {
     if (flush_buf_) cudaFree(flush_buf_);
 }
 
-Result Harness::run(const std::string& op, const std::string& variant, const std::string& shape, double bytes,
-                    double flops, const std::function<void(cudaStream_t)>& launch) {
-    CUDL_NVTX_RANGE((op + "/" + variant + "/" + shape).c_str());
+bool Harness::selected(const std::string& op, const std::string& algo, const std::string& load) const {
+    return std::regex_match(op, op_re_) && std::regex_match(algo, algo_re_) && std::regex_match(load, load_re_);
+}
+
+Result Harness::run_baseline(const std::string& op, const std::string& name, const std::string& shape, double bytes,
+                             double flops, const Launch& launch) {
+    return time({op, name, "-", name, shape, bytes, flops}, launch);
+}
+
+Result Harness::time(Result r, const Launch& launch) {
+    CUDL_NVTX_RANGE((r.op + "/" + r.variant + "/" + r.shape).c_str());
     const cudaStream_t stream = Context::get().stream();
 
     for (int i = 0; i < opts_.warmup; ++i) launch(stream);
@@ -146,12 +172,6 @@ Result Harness::run(const std::string& op, const std::string& variant, const std
     }
     std::sort(times.begin(), times.end());
 
-    Result r;
-    r.op = op;
-    r.variant = variant;
-    r.shape = shape;
-    r.bytes = bytes;
-    r.flops = flops;
     r.median_ms = percentile(times, 0.5);
     r.p10_ms = percentile(times, 0.1);
     r.p90_ms = percentile(times, 0.9);
@@ -162,17 +182,19 @@ Result Harness::run(const std::string& op, const std::string& variant, const std
 
 void Harness::report(const Result& r) {
     if (!header_printed_) {
-        std::printf("%-10s %-12s %-14s %10s %10s %10s %9s %9s %8s\n", "op", "variant", "shape", "median_ms", "p10_ms",
-                    "p90_ms", "GB/s", "GFLOP/s", "%peakBW");
+        std::printf("%-10s %-10s %-6s %-14s %10s %10s %10s %9s %9s %8s\n", "op", "algo", "load", "shape", "median_ms",
+                    "p10_ms", "p90_ms", "GB/s", "GFLOP/s", "%peakBW");
         header_printed_ = true;
     }
-    std::printf("%-10s %-12s %-14s %10.4f %10.4f %10.4f %9.1f %9.1f %7.1f%%\n", r.op.c_str(), r.variant.c_str(),
-                r.shape.c_str(), r.median_ms, r.p10_ms, r.p90_ms, r.gbps(), r.gflops(), r.pct_peak_bw());
+    std::printf("%-10s %-10s %-6s %-14s %10.4f %10.4f %10.4f %9.1f %9.1f %7.1f%%\n", r.op.c_str(),
+                r.algo.empty() ? "-" : r.algo.c_str(), r.load.c_str(), r.shape.c_str(), r.median_ms, r.p10_ms,
+                r.p90_ms, r.gbps(), r.gflops(), r.pct_peak_bw());
     std::fflush(stdout);
 
     if (json_.is_open()) {
         const DeviceInfo& dev = DeviceInfo::get();
-        json_ << "{\"op\":\"" << json_escape(r.op) << "\",\"variant\":\"" << json_escape(r.variant) << "\",\"shape\":\""
+        json_ << "{\"op\":\"" << json_escape(r.op) << "\",\"variant\":\"" << json_escape(r.variant) << "\",\"algo\":\""
+              << json_escape(r.algo) << "\",\"load\":\"" << json_escape(r.load) << "\",\"shape\":\""
               << json_escape(r.shape) << "\",\"median_ms\":" << r.median_ms << ",\"p10_ms\":" << r.p10_ms
               << ",\"p90_ms\":" << r.p90_ms << ",\"bytes\":" << r.bytes << ",\"flops\":" << r.flops
               << ",\"gbps\":" << r.gbps() << ",\"gflops\":" << r.gflops() << ",\"pct_peak_bw\":" << r.pct_peak_bw()
