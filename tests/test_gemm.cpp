@@ -30,14 +30,14 @@ struct Scalars {
     float alpha, beta;
 };
 
-// Includes empty dims, K == 0, and shapes that don't divide the 16x16 tile.
+// Includes empty dims, K == 0, and shapes that don't divide the tile
 const std::vector<Shape> kShapes{{0, 4, 4},   {4, 0, 4},     {3, 5, 0},      {1, 1, 1},       {1, 7, 13},
                                  {16, 16, 16}, {17, 33, 9},  {127, 65, 33},  {64, 256, 128},  {300, 200, 513}};
 const std::vector<Scalars> kScalars{{1.0f, 0.0f}, {1.0f, 1.0f}, {0.5f, -2.0f}, {0.0f, 0.75f}};
 const std::vector<size_t> kOffsets{0, 1};
 const std::vector<std::pair<bool, bool>> kTrans{{false, false}, {true, false}, {false, true}, {true, true}};
 
-// fp32 dot-product error grows with K (inputs are in [-1, 1]).
+// fp32 dot-product error grows with K (inputs are in [-1, 1])
 test::Tolerance gemm_tolerance(size_t k) {
     return {1e-6 * static_cast<double>(k + 1), 1e-5, -1};
 }

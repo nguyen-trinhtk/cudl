@@ -15,6 +15,7 @@ namespace cudl::kernels {
 
 // Variants:
 //  naive: each thread compute each Cij
+//  smem: 32x32 tiles of A and B staged in shared memory, each thread still computes one Cij
 using GemmFn = void (*)(const float* a, const float* b, float* c, size_t m, size_t n, size_t k, bool trans_a,
                        bool trans_b, float alpha, float beta, cudaStream_t stream);
 

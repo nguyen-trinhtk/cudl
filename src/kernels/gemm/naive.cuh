@@ -6,11 +6,11 @@
 // Naive kernel: each thread computes one C[row, col]
 namespace cudl::kernels::gemm_impl {
 
-static const int BLOCK_SIZE_X = 16;
-static const int BLOCK_SIZE_Y = 16;
+static const int BLOCK_SIZE_X = 32;
+static const int BLOCK_SIZE_Y = 32;
 
 template <bool TransA, bool TransB>
-__global__ void naive_kernel(const float* __restrict__ a, const float* __restrict__ b, float* __restrict__ c,
+__global__ void naive_kernel(const float* __restrict__ A, const float* __restrict__ B, float* __restrict__ C,
                              size_t m, size_t n, size_t k, float alpha, float beta) {
     // for memory coalescing, y-dim = row and x-dim = col
     const size_t row = static_cast<size_t>(blockIdx.y) * blockDim.y + threadIdx.y;
@@ -21,18 +21,18 @@ __global__ void naive_kernel(const float* __restrict__ a, const float* __restric
     // dot product loop
     float acc = 0.0f;
     for (size_t i = 0; i < k; ++i) {
-        const float av = load_op<TransA>(a, row, i, m, k);
-        const float bv = load_op<TransB>(b, i, col, k, n);
+        const float av = load_op<TransA>(A, row, i, m, k);
+        const float bv = load_op<TransB>(B, i, col, k, n); // not coalesced if B is transposed :(
         acc += av * bv;
     }
     
-    float* out = &c[row * n + col];
+    float* out = &C[row * n + col];
     // beta = 0: skip reading C
     const float scaled = alpha * acc; // alpha A*B
     *out = (beta == 0.0f) ? scaled : scaled + beta * (*out);
 }
 
-inline void gemm_naive(const float* a, const float* b, float* c, size_t m, size_t n, size_t k, bool trans_a,
+inline void gemm_naive(const float* A, const float* B, float* C, size_t m, size_t n, size_t k, bool trans_a,
                        bool trans_b, float alpha, float beta, cudaStream_t stream) {
     if (m == 0 || n == 0) 
         return;
@@ -48,7 +48,7 @@ inline void gemm_naive(const float* a, const float* b, float* c, size_t m, size_
     const size_t smem_bytes = 0; // no dynamic smem 
 
     dispatch_trans(trans_a, trans_b, [&](auto ta, auto tb) {
-        naive_kernel<decltype(ta)::value, decltype(tb)::value><<<grid, block, smem_bytes, stream>>>(a, b, c, m, n, k, alpha, beta);
+        naive_kernel<decltype(ta)::value, decltype(tb)::value><<<grid, block, smem_bytes, stream>>>(A, B, C, m, n, k, alpha, beta);
     });
 
     CUDL_KERNEL_CHECK();

@@ -9,11 +9,11 @@ namespace cudl::kernels::gemm_impl {
 // ---- Device helpers ----
 // Load or load transpose
 template <bool Trans>
-__device__ __forceinline__ float load_op(const float* __restrict__ x, size_t r, size_t c, size_t rows, size_t cols) {
+__device__ __forceinline__ float load_op(const float* __restrict__ X, size_t r, size_t c, size_t rows, size_t cols) {
     if constexpr (Trans) {
-        return x[c * rows + r];  // col-major storage
+        return X[c * rows + r];  // col-major storage
     } else {
-        return x[r * cols + c];
+        return X[r * cols + c];
     }
 }
 
