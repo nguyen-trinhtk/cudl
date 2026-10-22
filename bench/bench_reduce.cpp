@@ -56,6 +56,20 @@ int main(int argc, char** argv) {
                     if (r && n == largest) best_pct[name] = std::max(best_pct[name], r->pct_peak_bw());
                 }
             }
+
+            // First-dimension reductions (bias gradient shape: many rows, few columns, and the reverse).
+            for (const int64_t cols : {int64_t{256}, int64_t{32768}}) {
+                const int64_t rows = n / cols;
+                const std::string shape = std::to_string(rows) + "x" + std::to_string(cols);
+                const std::string name = std::string(op) + "_cols";
+                for (const auto& k : registry<ReduceColsFn>().entries(op)) {
+                    const auto r = harness.run(
+                        name, k, shape, nb + cols * sizeof(float), static_cast<double>(n), [&](cudaStream_t s) {
+                            k.fn(pi, out.data<float>(), static_cast<size_t>(rows), static_cast<size_t>(cols), s);
+                        });
+                    if (r && n == largest) best_pct[name] = std::max(best_pct[name], r->pct_peak_bw());
+                }
+            }
         }
     }
 

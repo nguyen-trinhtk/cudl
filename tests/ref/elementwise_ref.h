@@ -28,6 +28,7 @@ inline BinaryOp binary_op(const std::string& op) {
     if (op == "sub") return [](double a, double b) { return a - b; };
     if (op == "mul") return [](double a, double b) { return a * b; };
     if (op == "div") return [](double a, double b) { return a / b; };
+    if (op == "relu_grad") return [](double dy, double x) { return x > 0.0 ? dy : 0.0; };
     CUDL_FAIL("no reference for binary op '" << op << "'");
 }
 

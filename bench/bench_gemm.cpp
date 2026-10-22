@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
 
         for (const auto& k : registry<GemmFn>().entries("gemm")) {
             auto launch = [&](cudaStream_t st) {
-                k.fn(pa, pb, pc, us, us, us, /*alpha=*/1.0f, /*beta=*/0.0f, st);
+                k.fn(pa, pb, pc, us, us, us, /*trans_a=*/false, /*trans_b=*/false, /*alpha=*/1.0f, /*beta=*/0.0f, st);
             };
             harness.run("gemm", k, shape, bytes, flops, launch);
         }

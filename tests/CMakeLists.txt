@@ -16,7 +16,10 @@ add_executable(cudl_tests
     test_copy.cpp
     test_elementwise.cpp
     test_reduce.cpp
-    test_gemm.cpp)
+    test_gemm.cpp
+    test_loss.cpp
+    test_optim.cpp
+    test_nn.cpp)
 target_link_libraries(cudl_tests PRIVATE cudl_testing GTest::gtest_main)
 
 include(GoogleTest)

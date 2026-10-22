@@ -30,10 +30,23 @@ inline std::vector<double> reduce_all(const std::string& op, const std::vector<f
     return {reduce(op, in.data(), in.size())};
 }
 
-// in is row-major [rows, cols]; one result per row.
+// in is row-major [rows, cols]; reduce into one result per row.
 inline std::vector<double> reduce_rows(const std::string& op, const std::vector<float>& in, size_t rows, size_t cols) {
     std::vector<double> out(rows);
     for (size_t r = 0; r < rows; ++r) out[r] = reduce(op, in.data() + r * cols, cols);
+    return out;
+}
+
+// in is row-major [rows, cols]; reduce into one result per column.
+inline std::vector<double> reduce_cols(const std::string& op, const std::vector<float>& in, size_t rows, size_t cols) {
+    std::vector<double> out(cols);
+    std::vector<float> column(rows);
+    for (size_t c = 0; c < cols; ++c) {
+        for (size_t r = 0; r < rows; ++r) {
+            column[r] = in[r * cols + c];
+        }
+        out[c] = reduce(op, column.data(), rows);
+    }
     return out;
 }
 
