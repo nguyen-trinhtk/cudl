@@ -8,6 +8,7 @@ Notes on extending, debugging and profiling cuDL. Building and running are in th
   - [Adding an elementwise op](#adding-an-elementwise-op)
   - [Reductions](#reductions)
 - [Determinism and drift](#determinism-and-drift)
+- [Layers and training](#layers-and-training)
 - [Choosing a variant at run time](#choosing-a-variant-at-run-time)
 - [Building without a GPU](#building-without-a-gpu)
 - [Running on Slurm](#running-on-slurm)
@@ -96,6 +97,26 @@ Multi-block reductions write one partial result per block, then reduce the parti
   CUDL_DRIFT_CSV=drift.csv build/tests/cudl_tests --gtest_filter='ReduceDrift.*'
   scripts/plot_drift.py drift.csv -o drift.png
   ```
+
+## Layers and training
+
+`nn/` and `optim/` sit on top of the kernels and are plain host code: they check shapes, resolve their kernels from the registry once at construction, and launch them on the context stream.
+
+- **Modules** (`include/cudl/nn/`): `Linear`, `ReLU` and `Sequential` implement `forward` and `backward`. Each module saves what its backward needs during forward and owns its output buffers, which are reallocated only when the batch size changes. A returned tensor is valid until the next call on the same module. `backward` overwrites parameter grads rather than accumulating, so there is no `zero_grad`.
+- **Weight layout:** `Linear` stores `W` as `[in, out]`, so forward is a plain GEMM. Backward uses the GEMM transpose flags: `dW = xᵀ·dy`, `dx = dy·Wᵀ`. The bias grad is `sum` over columns (`ReduceColsFn`).
+- **Loss:** `CrossEntropyLoss` runs the fused `cross_entropy_loss` kernel, which writes the per-row loss and `dL/dlogits` in one pass. The mean loss stays on the GPU; reading it with `to_vector()` synchronizes.
+- **Kernel choice:** modules use `get_default(op, fallback)`, so `CUDL_KERNEL_<OP>` still overrides them. The loss uses the `warp` sum (not the first-registered `atomic` one) so it's deterministic.
+
+Tests in `tests/test_nn.cpp`:
+
+- **Gradcheck:** `Gradcheck.MlpMatchesFiniteDifferences` compares every GPU gradient of a small MLP (weights, biases, input) with fp64 central differences of the CPU reference loss in `tests/ref/nn_ref.h`.
+- **Training drift:** `TrainingDrift.GpuTracksFp64Reference` trains the same MLP with SGD + momentum on the GPU (fp32) and the CPU reference (fp64) for 200 steps, from the same weights on the same batches, and checks that `max|gpu − cpu| / max|cpu|` over all parameters stays below 1e-3. Save the per-step table with `CUDL_TRAIN_DRIFT_CSV=path`.
+
+To train MNIST on Slurm, run `scripts/get_mnist.sh` on the login node, then `sbatch scripts/slurm/train.sbatch` (extra args go to `mlp_mnist`). For the per-op time breakdown, every module, the loss and the optimizer push NVTX ranges:
+
+```sh
+sbatch scripts/slurm/profile.sbatch nsys build/examples/mlp_mnist --epochs 1
+```
 
 ## Choosing a variant at run time
 

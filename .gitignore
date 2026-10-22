@@ -14,3 +14,6 @@ compile_commands.json
 # Slurm
 scripts/slurm/logs/
 results/
+
+# Datasets (run via `scripts/get_mnist.sh`)
+data/

@@ -10,6 +10,7 @@ project(cudl LANGUAGES CXX CUDA)
 
 option(CUDL_BUILD_TESTS "Build unit tests" ON)
 option(CUDL_BUILD_BENCH "Build benchmarks" ON)
+option(CUDL_BUILD_EXAMPLES "Build examples" ON)
 option(CUDL_SYNC_KERNELS "Synchronize after every kernel launch (debugging)" OFF)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -43,7 +44,12 @@ add_library(cudl STATIC
     src/kernels/copy.cu
     src/kernels/elementwise.cu
     src/kernels/reduce.cu
-    src/kernels/gemm.cu)
+    src/kernels/gemm.cu
+    src/kernels/loss.cu
+    src/kernels/optim.cu
+    src/nn/layers.cpp
+    src/nn/loss.cpp
+    src/optim/optim.cpp)
 
 target_include_directories(cudl PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(cudl PUBLIC CUDA::cudart)
@@ -76,4 +82,8 @@ endif()
 
 if(CUDL_BUILD_BENCH)
     add_subdirectory(bench)
+endif()
+
+if(CUDL_BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif()
