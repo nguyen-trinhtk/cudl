@@ -16,10 +16,10 @@ namespace cudl::kernels {
 inline constexpr const char* kLoadScalar = "scalar";
 inline constexpr const char* kLoadVec4 = "vec4";
 
-// One implementation of an op, identified by three independent axes:
-//   op:   what is computed ("sum", "relu", ...)
-//   algo: how it is computed ("atomic", "smem", "warp", ...) (empty if kernel has none)
-//   load: how each thread reads memory (scalar or vec4)
+// One implementation of an op
+//   op: operation name
+//   algo: naive, smem-tile, etc.
+//   load: scalar or vec4
 template <typename Fn>
 struct KernelEntry {
     // use string so benchmark can regex (instead of enum)

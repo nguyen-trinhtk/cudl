@@ -87,6 +87,7 @@ Args parse(int argc, char** argv) {
 }
 
 // Copies samples order[first, first + count) into the batch tensors (host gather, then one upload each)
+// TODO: overlap data transfer with another cuda stream
 void load_batch(const mnist::Dataset& d, const std::vector<int64_t>& order, int64_t first, int64_t count,
                 std::vector<float>& host_x, std::vector<int32_t>& host_y, Tensor& x, Tensor& y) {
     CUDL_NVTX_RANGE("load_batch");
