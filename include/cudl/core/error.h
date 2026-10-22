@@ -69,5 +69,6 @@ namespace detail {
 
 #define CUDL_CHECK(cond, msg)                                       \
     do {                                                            \
-        if (!(cond)) CUDL_FAIL("check failed: " #cond ": " << msg); \
+        if (!(cond)) \
+        CUDL_FAIL("check failed: " #cond ": " << msg); \
     } while (0)

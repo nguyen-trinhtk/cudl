@@ -196,6 +196,7 @@ void register_elementwise_kernels() {
     add_binary<ops::Sub>("sub");
     add_binary<ops::Mul>("mul");
     add_binary<ops::Div>("div");
+    add_binary<ops::ReluGrad>("relu_grad");
 
     // Scale
     add_loads(detail::raw_registry<ScaleFn>(), "scale", "", &scale<Load::Scalar>, &scale<Load::Vec4>);

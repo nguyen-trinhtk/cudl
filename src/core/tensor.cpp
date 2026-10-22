@@ -46,8 +46,30 @@ Tensor Tensor::empty(Shape shape, Device device, DType dtype) {
     return t;
 }
 
+// Zero tensor
+Tensor Tensor::zeros(Shape shape, Device device, DType dtype) {
+    Tensor t = empty(std::move(shape), device, dtype);
+    if (t.nbytes() == 0) return t;
+    if (device == Device::CPU) {
+        std::memset(t.raw_data(), 0, t.nbytes());
+    } else {
+        // Stream-ordered: kernels launched on the context stream afterwards see the zeros
+        CUDA_CHECK(cudaMemsetAsync(t.raw_data(), 0, t.nbytes(), Context::get().stream()));
+    }
+    return t;
+}
+
 Tensor Tensor::from_vector(const std::vector<float>& data, Shape shape, Device device) {
     Tensor t = empty(std::move(shape), device, DType::F32);
+    CUDL_CHECK(static_cast<size_t>(t.numel()) == data.size(),
+               "shape has " << t.numel() << " elements but data has " << data.size());
+    copy_bytes(t.raw_data(), device, data.data(), Device::CPU, t.nbytes());
+    return t;
+}
+
+// Create tensor from vector
+Tensor Tensor::from_vector(const std::vector<int32_t>& data, Shape shape, Device device) {
+    Tensor t = empty(std::move(shape), device, DType::I32);
     CUDL_CHECK(static_cast<size_t>(t.numel()) == data.size(),
                "shape has " << t.numel() << " elements but data has " << data.size());
     copy_bytes(t.raw_data(), device, data.data(), Device::CPU, t.nbytes());
@@ -95,4 +117,10 @@ std::vector<float> Tensor::to_vector() const {
     return out;
 }
 
+void Tensor::copy_from_host(const void* src, size_t nbytes) {
+    CUDL_CHECK(defined(), "tensor is undefined");
+    CUDL_CHECK(is_contiguous(), "copy_from_host() requires a contiguous tensor");
+    CUDL_CHECK(nbytes == this->nbytes(), "copying " << nbytes << " bytes into a " << this->nbytes() << "-byte tensor");
+    copy_bytes(raw_data(), device_, src, Device::CPU, nbytes);
+}
 }  // namespace cudl

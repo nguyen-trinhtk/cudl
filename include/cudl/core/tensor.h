@@ -19,7 +19,9 @@ public:
     Tensor() = default;
 
     static Tensor empty(Shape shape, Device device = Device::CUDA, DType dtype = DType::F32);
+    static Tensor zeros(Shape shape, Device device = Device::CUDA, DType dtype = DType::F32);
     static Tensor from_vector(const std::vector<float>& data, Shape shape, Device device = Device::CUDA);
+    static Tensor from_vector(const std::vector<int32_t>& data, Shape shape, Device device = Device::CUDA);
 
     bool defined() const { return storage_ != nullptr; }
     const Shape& shape() const { return shape_; }
@@ -45,10 +47,13 @@ public:
         return static_cast<const T*>(raw_data());
     }
 
-    // Synchronous copies
-    // Only for setup and tests due to perf
+    // Synchronous copies (slow perf)
+    // Only for setup and tests
     Tensor to(Device device) const;
     std::vector<float> to_vector() const;
+    // Overwrite the whole tensor from host memory
+    // nbytes must equal this->nbytes()
+    void copy_from_host(const void* src, size_t nbytes);
 
 private:
     template <typename T>

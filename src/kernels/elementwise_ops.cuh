@@ -38,4 +38,7 @@ struct Mul {
 struct Div {
     __device__ float operator()(float a, float b) const { return a / b; }
 };
+struct ReluGrad { // backward ReLU
+    __device__ float operator()(float dy, float x) const { return x > 0.0f ? dy : 0.0f; }
+};
 }  // namespace cudl::kernels::ops

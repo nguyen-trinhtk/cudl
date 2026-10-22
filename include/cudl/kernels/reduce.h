@@ -39,6 +39,14 @@ using ReduceAllFn = void (*)(const float* in, float* out, size_t n, float* works
 // NOTE: Use warp for short rows and smem for longer rows
 using ReduceRowsFn = void (*)(const float* in, float* out, size_t rows, size_t cols, cudaStream_t stream);
 
+// Column-wise reduction for a row-major matrix
+// out[c] = reduce(in[:, c])
+// e.g. bias gradient sums dy over the batch
+// Variants:
+//   thread: one thread per column (neighbouring threads read neighbouring columns, so loads coalesce)
+// TODO: smem/warp kernels?
+using ReduceColsFn = void (*)(const float* in, float* out, size_t rows, size_t cols, cudaStream_t stream);
+
 // Kernel registration
 inline constexpr const char* kReduceOps[] = {"sum", "max"};
 void register_reduce_kernels();

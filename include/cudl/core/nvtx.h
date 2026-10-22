@@ -6,7 +6,7 @@
 
 namespace cudl {
 
-// Scoped NVTX range; shows up as a named span in Nsight Systems timelines.
+// RAII NVTX range to show host-side name spane in nsys
 class NvtxRange {
 public:
     explicit NvtxRange(const char* name) {
@@ -27,6 +27,10 @@ public:
 
 }  // namespace cudl
 
+// Macro for naming nvtx wrappers
+// Use 2level macro wrapping to expand __line__ into line number first
 #define CUDL_NVTX_CONCAT_(a, b) a##b
 #define CUDL_NVTX_CONCAT(a, b) CUDL_NVTX_CONCAT_(a, b)
-#define CUDL_NVTX_RANGE(name) ::cudl::NvtxRange CUDL_NVTX_CONCAT(cudl_nvtx_range_, __LINE__)(name)
+#define CUDL_NVTX_RANGE(name) \
+    ::cudl::NvtxRange \
+    CUDL_NVTX_CONCAT(cudl_nvtx_range_, __LINE__)(name)

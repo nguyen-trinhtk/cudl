@@ -12,18 +12,18 @@
 // Kernel registry
 namespace cudl::kernels {
 
-// Load axis names (match enum class Load in src/kernels/launch_utils.h)
+// Load types (match enum class Load in src/kernels/launch_utils.h)
 inline constexpr const char* kLoadScalar = "scalar";
 inline constexpr const char* kLoadVec4 = "vec4";
 
 // One implementation of an op, identified by three independent axes:
 //   op:   what is computed ("sum", "relu", ...)
-//   algo: how it is computed ("atomic", "smem", "warp", ...); empty if the op has no algorithm axis
-//   load: how each thread reads memory (kLoadScalar or kLoadVec4)
-// Strings rather than enums so one registry type serves every op and benchmarks can filter on them.
+//   algo: how it is computed ("atomic", "smem", "warp", ...) (empty if kernel has none)
+//   load: how each thread reads memory (scalar or vec4)
 template <typename Fn>
 struct KernelEntry {
-    std::string op;
+    // use string so benchmark can regex (instead of enum)
+    std::string op; 
     std::string algo;
     std::string load = kLoadScalar;
     Fn fn = nullptr;            // launcher as a function obj
@@ -57,12 +57,15 @@ public:
         CUDL_FAIL("unknown variant '" << variant << "' for op '" << op << "'");
     }
 
-    // First registered variant
+    // Fallback variant
+    // is first registered one if fallback is empty
     // can be overridden by env CUDL_KERNEL_<OP>=<variant>.
-    const KernelEntry<Fn>& get_default(const std::string& op) const {
+    const KernelEntry<Fn>& get_default(const std::string& op, const std::string& fallback = "") const {
         std::string env = "CUDL_KERNEL_" + op;
         std::transform(env.begin(), env.end(), env.begin(), [](unsigned char c) { return std::toupper(c); });
         if (const char* v = std::getenv(env.c_str())) return get(op, v);
+        if (!fallback.empty())
+            return get(op, fallback);
         return entries(op).front();
     }
 

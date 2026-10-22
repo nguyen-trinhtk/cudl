@@ -1,10 +1,10 @@
 #include <algorithm>
-#include <limits>
 
 #include "cudl/core/error.h"
 #include "cudl/kernels/reduce.h"
 #include "cudl/kernels/registry.h"
 #include "launch_utils.h"
+#include "reduce_ops.cuh"
 
 namespace cudl::kernels {
 namespace {
@@ -14,46 +14,6 @@ static_assert(K_BLOCK % K_WARP == 0 && K_BLOCK <= K_MAX_BLOCK, "warp shuffles ne
 
 // Reduce-all variants: how per-thread partials are combined
 enum class Variant { Atomic, Smem, Warp };
-
-// ---- Functors ----
-
-// Reduction functors:
-// - Identity element for empty input
-// - Combine operator
-// - Atomic combine
-struct SumOp {
-    static constexpr float identity() { 
-        return 0.0f;
-     }
-    __device__ float operator()(float a, float b) const { 
-        return a + b; 
-    }
-    __device__ static void atomic(float* addr, float v) { 
-        atomicAdd(addr, v); // cuda atomic add
-    }
-};
-
-struct MaxOp {
-    static constexpr float identity() { 
-        return -std::numeric_limits<float>::infinity(); 
-    }
-    __device__ float operator()(float a, float b) const { 
-        return fmaxf(a, b); 
-    }
-
-    // Compare-and-swap until stored value >= v
-    // atomic max always != NaNs
-    __device__ static void atomic(float* addr, float v) {
-        int* bits = reinterpret_cast<int*>(addr);
-        float cur = *reinterpret_cast<volatile float*>(addr);
-        while (cur < v) {
-            const int prev = atomicCAS(bits, __float_as_int(cur), __float_as_int(v));
-            if (prev == __float_as_int(cur)) 
-                break;
-            cur = __int_as_float(prev);
-        }
-    }
-};
 
 // ---- Device helpers ----
 
@@ -221,6 +181,20 @@ __global__ void reduce_rows_warp_kernel(Op op, const float* __restrict__ in, flo
     }
 }
 
+// One thread per column, already coalesced
+template <typename Op>
+__global__ void reduce_cols_thread_kernel(Op op, const float* __restrict__ in, float* __restrict__ out, size_t rows,
+                                          size_t cols) {
+    const size_t stride = static_cast<size_t>(gridDim.x) * blockDim.x;
+    for (size_t c = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x; c < cols; c += stride) {
+        float acc = Op::identity();
+        for (size_t r = 0; r < rows; ++r) {
+            acc = op(acc, in[r * cols + c]);
+        }
+        out[c] = acc;
+    }
+}
+
 // ---- Host helpers ----
 
 // Block count for two-pass reductions: one partial per block must fit in the workspace.
@@ -297,6 +271,13 @@ void reduce_rows_warp(const float* in, float* out, size_t rows, size_t cols, cud
     CUDL_KERNEL_CHECK();
 }
 
+template <typename Op>
+void reduce_cols_thread(const float* in, float* out, size_t rows, size_t cols, cudaStream_t stream) {
+    if (cols == 0) return;
+    reduce_cols_thread_kernel<<<grid_size(cols, K_BLOCK), K_BLOCK, 0, stream>>>(Op{}, in, out, rows, cols);
+    CUDL_KERNEL_CHECK();
+}
+
 // ---- Registration ----
 
 // Helper to add reduce kernels
@@ -314,6 +295,9 @@ void add_reduce(const char* op, bool atomic_deterministic) {
     rr.add({op, "thread", kLoadScalar, &reduce_rows_thread<Op>});
     rr.add({op, "smem", kLoadScalar, &reduce_rows_smem<Op>});
     rr.add({op, "warp", kLoadScalar, &reduce_rows_warp<Op>});
+
+    // Reduce cols (scalar loads only)
+    detail::raw_registry<ReduceColsFn>().add({op, "thread", kLoadScalar, &reduce_cols_thread<Op>});
 }
 }  // namespace
 
