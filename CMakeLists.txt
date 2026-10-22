@@ -42,7 +42,8 @@ add_library(cudl STATIC
     src/kernels/register_all.cpp
     src/kernels/copy.cu
     src/kernels/elementwise.cu
-    src/kernels/reduce.cu)
+    src/kernels/reduce.cu
+    src/kernels/gemm.cu)
 
 target_include_directories(cudl PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(cudl PUBLIC CUDA::cudart)

@@ -5,6 +5,7 @@ compile_commands.json
 *.nsys-rep
 *.ncu-rep
 .local/
+.claude/
 .vscode/
 .idea/
 .DS_Store
