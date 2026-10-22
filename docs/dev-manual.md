@@ -195,6 +195,15 @@ bench/compare.py before.jsonl after.jsonl --threshold 5
 
 Rows are matched on GPU, op, algo, load and shape. `compare.py` takes the same `--op`, `--algo` and `--load` filters as the benchmarks, plus `--filter`, a regex searched in `op/variant/shape`. Changes beyond the threshold are marked `+` (faster) or `-` (slower), and the script exits with 1 if anything got slower.
 
+To plot one run (needs matplotlib), use `scripts/plot_bench.py`. It draws one panel per op and a bar group per shape. Bar color is the algo, and vec4 bars are hatched. The dashed line is the best `cudaMemcpy` result in the file:
+
+```sh
+scripts/plot_bench.py results.jsonl -o bench.png                     # GB/s, every op
+scripts/plot_bench.py results.jsonl --op 'sum|sum_rows' --metric pct  # % of peak; also --metric ms
+```
+
+It takes the same `--op`, `--algo` and `--load` filters as `compare.py`.
+
 ### Options
 
 | Flag / variable | Effect |
