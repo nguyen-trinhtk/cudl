@@ -297,7 +297,7 @@ void add_reduce(const char* op, bool atomic_deterministic) {
     rr.add({op, "warp", kLoadScalar, &reduce_rows_warp<Op>});
 
     // Reduce cols (scalar loads only)
-    detail::raw_registry<ReduceColsFn>().add({op, "thread", kLoadScalar, &reduce_cols_thread<Op>});
+    detail::raw_registry<ReduceColsFn, ReduceColsTag>().add({op, "thread", kLoadScalar, &reduce_cols_thread<Op>});
 }
 }  // namespace
 

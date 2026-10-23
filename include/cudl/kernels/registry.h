@@ -92,7 +92,8 @@ private:
 namespace detail {
 // Used by register_*_kernels(); 
 // Note: everything else uses registry<Fn>().
-template <typename Fn>
+// Tag: separates kernel families that share a signature (otherwise they would share one registry)
+template <typename Fn, typename Tag = void>
 Registry<Fn>& raw_registry() {
     static Registry<Fn> r;
     return r;
@@ -103,9 +104,9 @@ void ensure_kernels_registered(); // see .cpp
 
 // Global singleton registry
 // Template: diff args for diff ops
-template <typename Fn>
+template <typename Fn, typename Tag = void>
 Registry<Fn>& registry() {
     detail::ensure_kernels_registered(); // register all kernels once
-    return detail::raw_registry<Fn>(); // return 
+    return detail::raw_registry<Fn, Tag>(); // return 
 }
 }  // namespace cudl::kernels

@@ -26,7 +26,7 @@ Linear::Linear(int64_t in_features, int64_t out_features, Rng& rng, Init init)
 
     gemm_ = kernels::registry<kernels::GemmFn>().get_default("gemm").fn;
     add_bias_ = kernels::registry<kernels::BiasFn>().get_default("add_bias", kernels::kLoadVec4).fn;
-    sum_cols_ = kernels::registry<kernels::ReduceColsFn>().get_default("sum", "thread").fn;
+    sum_cols_ = kernels::registry<kernels::ReduceColsFn, kernels::ReduceColsTag>().get_default("sum", "thread").fn;
 }
 
 Tensor Linear::forward(const Tensor& x) {

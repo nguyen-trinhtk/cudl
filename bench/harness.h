@@ -7,6 +7,7 @@
 
 #include <cuda_runtime.h>
 
+#include <cstdint>
 #include <fstream>
 #include <functional>
 #include <optional>
@@ -26,6 +27,9 @@ struct Options {
 
     // Axis filters: regexes that must match the whole op / algo / load name (empty = all)
     std::string op_filter, algo_filter, load_filter;
+
+    // Problem sizes from --size (repeatable); empty = the bench's own defaults (benches that support it)
+    std::vector<int64_t> sizes;
 
     static Options parse(int argc, char** argv);
 };

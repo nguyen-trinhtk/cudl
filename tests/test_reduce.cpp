@@ -165,7 +165,7 @@ class ReduceColsTest : public ::testing::TestWithParam<RowsParam> {};
 std::vector<float> run_reduce_cols(const std::string& op, const std::string& variant, const std::vector<float>& in,
                                    size_t rows, size_t cols) {
     test::Guarded d_in(in, 1), out(cols, 1);
-    kernels::registry<ReduceColsFn>().get(op, variant).fn(d_in.data(), out.data(), rows, cols, Context::get().stream());
+    kernels::registry<ReduceColsFn, kernels::ReduceColsTag>().get(op, variant).fn(d_in.data(), out.data(), rows, cols, Context::get().stream());
     Context::get().synchronize();
     EXPECT_TRUE(out.guards_intact());
     return out.body();
@@ -192,7 +192,7 @@ INSTANTIATE_TEST_SUITE_P(
     AllVariants, ReduceColsTest,
     ::testing::Combine(
         ::testing::ValuesIn(op_names(kernels::kReduceOps)),
-        ::testing::ValuesIn(kernels::registry<ReduceColsFn>().variants("sum")),
+        ::testing::ValuesIn(kernels::registry<ReduceColsFn, kernels::ReduceColsTag>().variants("sum")),
         ::testing::ValuesIn(std::vector<std::pair<size_t, size_t>>{
             {0, 5}, {3, 0}, {1, 1}, {1000, 1}, {31, 7}, {32, 33}, {257, 100}, {1024, 1000}, {100000, 4}})),
     RowsName);

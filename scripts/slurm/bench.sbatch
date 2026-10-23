@@ -16,7 +16,7 @@ set -euo pipefail
 source "$(dirname "$(scontrol show job "$SLURM_JOB_ID" | sed -n 's/^ *Command=\([^ ]*\).*/\1/p')")/env.sh"
 
 out=results/bench-$(git rev-parse --short HEAD)-${SLURM_JOB_ID}.jsonl
-for b in copy elementwise reduce nn; do
+for b in copy elementwise reduce nn gemm; do
     build/bench/bench_$b --json "$out" "$@"
 done
 echo "results: $out"

@@ -19,9 +19,10 @@ namespace {
 [[noreturn]] void usage(const char* prog, int code) {
     std::fprintf(code ? stderr : stdout,
                  "usage: %s [--warmup N] [--iters N] [--flush-l2] [--json PATH]\n"
-                 "          [--op REGEX] [--algo REGEX] [--load REGEX]\n"
+                 "          [--op REGEX] [--algo REGEX] [--load REGEX] [--size N]...\n"
                  "  --op/--algo/--load keep only kernels whose op / algo / load name fully matches\n"
-                 "  (load is scalar or vec4; algo is empty for ops without one, e.g. elementwise)\n",
+                 "  (load is scalar or vec4; algo is empty for ops without one, e.g. elementwise)\n"
+                 "  --size replaces the bench's default problem sizes (repeatable; gemm only for now)\n",
                  prog);
     std::exit(code);
 }
@@ -77,6 +78,8 @@ Options Options::parse(int argc, char** argv) {
             o.algo_filter = value();
         else if (arg == "--load")
             o.load_filter = value();
+        else if (arg == "--size")
+            o.sizes.push_back(std::atoll(value()));
         else if (arg == "-h" || arg == "--help")
             usage(argv[0], 0);
         else {

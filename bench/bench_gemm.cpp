@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <string>
+#include <vector>
 
 #include "cudl/core/context.h"
 #include "cudl/core/error.h"
@@ -14,11 +15,13 @@ int main(int argc, char** argv) {
     using namespace cudl;
     using namespace cudl::kernels;
 
-    bench::Harness harness(bench::Options::parse(argc, argv));
+    const bench::Options opts = bench::Options::parse(argc, argv);
+    bench::Harness harness(opts);
     const auto& dev = bench::DeviceInfo::get();
     std::printf("# %s, %d SMs, theoretical peak %.0f GB/s\n\n", dev.name.c_str(), dev.sm_count, dev.peak_bw_gbps);
 
-    const int64_t sizes[] = {256, 512, 1024, 2048};
+    // Add option for sizes
+    const std::vector<int64_t> sizes = opts.sizes.empty() ? std::vector<int64_t>{256, 512, 1024, 2048} : opts.sizes;
 
     for (const int64_t s : sizes) {
         Tensor a = Tensor::empty({s, s}), b = Tensor::empty({s, s}), c = Tensor::empty({s, s});

@@ -45,7 +45,9 @@ using ReduceRowsFn = void (*)(const float* in, float* out, size_t rows, size_t c
 // Variants:
 //   thread: one thread per column (neighbouring threads read neighbouring columns, so loads coalesce)
 // TODO: smem/warp kernels?
+// NOTE: same signature as ReduceRowsFn, so always look it up as registry<ReduceColsFn, ReduceColsTag>()
 using ReduceColsFn = void (*)(const float* in, float* out, size_t rows, size_t cols, cudaStream_t stream);
+struct ReduceColsTag {};
 
 // Kernel registration
 inline constexpr const char* kReduceOps[] = {"sum", "max"};

@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
                 const int64_t rows = n / cols;
                 const std::string shape = std::to_string(rows) + "x" + std::to_string(cols);
                 const std::string name = std::string(op) + "_cols";
-                for (const auto& k : registry<ReduceColsFn>().entries(op)) {
+                for (const auto& k : registry<ReduceColsFn, ReduceColsTag>().entries(op)) {
                     const auto r = harness.run(
                         name, k, shape, nb + cols * sizeof(float), static_cast<double>(n), [&](cudaStream_t s) {
                             k.fn(pi, out.data<float>(), static_cast<size_t>(rows), static_cast<size_t>(cols), s);
