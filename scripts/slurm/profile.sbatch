@@ -2,7 +2,7 @@
 # Run scripts/profile.sh on one GPU; takes the same arguments. Reports go to profiles/.
 #
 #   sbatch scripts/slurm/profile.sbatch nsys build/bench/bench_copy --iters 20
-#   sbatch scripts/slurm/profile.sbatch ncu 'copy_kernel<.*Vec4' build/bench/bench_copy --warmup 0 --iters 1
+#   sbatch scripts/slurm/profile.sbatch ncu copy_kernel build/bench/bench_copy --load vec4 --warmup 0 --iters 1
 #SBATCH -J cudl-profile
 #SBATCH -A spiralfreeprj
 #SBATCH --qos=free

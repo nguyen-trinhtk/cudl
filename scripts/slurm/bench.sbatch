@@ -4,7 +4,6 @@
 #
 #   sbatch scripts/slurm/bench.sbatch
 #   sbatch scripts/slurm/bench.sbatch --load vec4 --iters 200
-#   bench/compare.py results/bench-<old>.jsonl results/bench-<new>.jsonl
 #SBATCH -J cudl-bench
 #SBATCH -A spiralfreeprj
 #SBATCH --qos=free

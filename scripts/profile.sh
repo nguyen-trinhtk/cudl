@@ -7,7 +7,7 @@
 #
 # Examples:
 #   scripts/profile.sh nsys build/bench/bench_copy --iters 20
-#   scripts/profile.sh ncu 'copy_kernel<.*Vec4' build/bench/bench_copy --warmup 0 --iters 1
+#   scripts/profile.sh ncu copy_kernel build/bench/bench_copy --load vec4 --warmup 0 --iters 1
 set -euo pipefail
 
 usage() {
@@ -35,7 +35,8 @@ case "$mode" in
         # Report file name: regex with non-filename characters replaced
         tag=$(printf '%s' "$kernel" | tr -c 'A-Za-z0-9_-' '_')
         # Skip warmup launches; profile NCU_LAUNCH_COUNT launches of the matching kernel.
-        # Match the demangled name so template args (e.g. Load::Vec4) can be selected.
+        # Match the demangled name. Enum template args demangle as numbers (Load::Vec4 -> (cudl::kernels::Load)1),
+        # so select variants with the bench filters (--op/--algo/--load) rather than in the regex.
         ncu --set full --import-source yes \
             --kernel-name-base demangled \
             --kernel-name "regex:$kernel" \

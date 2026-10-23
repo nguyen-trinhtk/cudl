@@ -15,7 +15,7 @@ cd "$(git -C "$here" rev-parse --show-toplevel)"
 mkdir -p results profiles
 
 if [[ ! -d build ]]; then
-    echo "build/ not found: build on the login node first (see docs/dev-manual.md#running-on-slurm)" >&2
+    echo "build/ not found: build on the login node first (see docs/slurm.md)" >&2
     exit 1
 fi
 
