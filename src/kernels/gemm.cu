@@ -19,6 +19,8 @@ void register_gemm_kernels() {
     detail::raw_registry<GemmFn>().add({"gemm", "naive", load_name(Load::Scalar), &gemm_impl::gemm_naive<32, 32>});
     detail::raw_registry<GemmFn>().add({"gemm", "smem", load_name(Load::Scalar), &gemm_impl::gemm_smem_blocking<32>});
     detail::raw_registry<GemmFn>().add({"gemm", "smem_1d", load_name(Load::Scalar), &gemm_impl::gemm_smem_1d_tiling<64, 64, 8, 8>});
-    detail::raw_registry<GemmFn>().add({"gemm", "smem_2d", load_name(Load::Scalar), &gemm_impl::gemm_smem_2d_tiling<64, 64, 8, 8, 8>});
+    add_loads(detail::raw_registry<GemmFn>(), "gemm", "smem_2d",
+              &gemm_impl::gemm_smem_2d_tiling<64, 64, 8, 8, 8, Load::Scalar>,
+              &gemm_impl::gemm_smem_2d_tiling<64, 64, 8, 8, 8, Load::Vec4>);
 }
 }  // namespace cudl::kernels
