@@ -6,11 +6,10 @@
 // Naive kernel: each thread computes one C[row, col]
 namespace cudl::kernels::gemm_impl {
 
-static const int BLOCK_SIZE_X = 32;
-static const int BLOCK_SIZE_Y = 32;
-
-template <bool TransA, bool TransB>
-__global__ void naive_kernel(const float* __restrict__ A, const float* __restrict__ B, float* __restrict__ C,
+// BX, BY: block size in x (cols of C) and y (rows of C)
+template <int BX, int BY, bool TransA, bool TransB>
+__global__ void __launch_bounds__(BX * BY)
+naive_kernel(const float* __restrict__ A, const float* __restrict__ B, float* __restrict__ C,
                              size_t m, size_t n, size_t k, float alpha, float beta) {
     // for memory coalescing, y-dim = row and x-dim = col
     const size_t row = static_cast<size_t>(blockIdx.y) * blockDim.y + threadIdx.y;
@@ -32,15 +31,18 @@ __global__ void naive_kernel(const float* __restrict__ A, const float* __restric
     *out = (beta == 0.0f) ? scaled : scaled + beta * (*out);
 }
 
+template <int BX, int BY>
 inline void gemm_naive(const float* A, const float* B, float* C, size_t m, size_t n, size_t k, bool trans_a,
                        bool trans_b, float alpha, float beta, cudaStream_t stream) {
+    static_assert(BX * BY <= 1024, "too many threads per block");
+
     if (m == 0 || n == 0) 
         return;
     
-    const dim3 block(BLOCK_SIZE_X, BLOCK_SIZE_Y);
+    const dim3 block(BX, BY);
     
-    const size_t grid_x = (n + BLOCK_SIZE_X - 1) / (BLOCK_SIZE_X);
-    const size_t grid_y = (m + BLOCK_SIZE_Y - 1) / BLOCK_SIZE_Y;
+    const size_t grid_x = CEIL_DIV(n, BX);
+    const size_t grid_y = CEIL_DIV(m, BY);
     CUDL_CHECK(grid_y <= 65535, "gemm: m = " << m << " exceeds the grid's y limit");
     
     const dim3 grid(static_cast<unsigned>(grid_x), static_cast<unsigned>(grid_y));
@@ -48,7 +50,7 @@ inline void gemm_naive(const float* A, const float* B, float* C, size_t m, size_
     const size_t smem_bytes = 0; // no dynamic smem 
 
     dispatch_trans(trans_a, trans_b, [&](auto ta, auto tb) {
-        naive_kernel<decltype(ta)::value, decltype(tb)::value><<<grid, block, smem_bytes, stream>>>(A, B, C, m, n, k, alpha, beta);
+        naive_kernel<BX, BY, decltype(ta)::value, decltype(tb)::value><<<grid, block, smem_bytes, stream>>>(A, B, C, m, n, k, alpha, beta);
     });
 
     CUDL_KERNEL_CHECK();

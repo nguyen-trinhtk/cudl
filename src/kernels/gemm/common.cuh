@@ -3,6 +3,9 @@
 #include <cstddef>
 #include <type_traits>
 
+// Ceiling division for grid and tile counts
+#define CEIL_DIV(p, q) (((p) + (q) - 1) / (q))
+
 // Shared helpers for GEMM kernels
 namespace cudl::kernels::gemm_impl {
 

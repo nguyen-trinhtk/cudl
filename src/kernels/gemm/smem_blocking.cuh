@@ -7,10 +7,10 @@
 // Each thread still compute 1 element in C
 namespace cudl::kernels::gemm_impl {
 
-static const int TILE_SIZE = 32;
-// TODO: template over tile size?
-template <bool TransA, bool TransB>
-__global__ void smem_blocking(const float* __restrict__ A, const float* __restrict__ B, float* __restrict__ C,
+// TILE_SIZE: side of the square tiles of A, B and C per block
+template <int TILE_SIZE, bool TransA, bool TransB>
+__global__ void __launch_bounds__(TILE_SIZE * TILE_SIZE)
+smem_blocking(const float* __restrict__ A, const float* __restrict__ B, float* __restrict__ C,
                              size_t m, size_t n, size_t k, float alpha, float beta) {
     __shared__ float tile_A[TILE_SIZE][TILE_SIZE];
     __shared__ float tile_B[TILE_SIZE][TILE_SIZE];
@@ -23,7 +23,7 @@ __global__ void smem_blocking(const float* __restrict__ A, const float* __restri
     const size_t row = by * TILE_SIZE + ty; // y
     const size_t col = bx * TILE_SIZE + tx; // x
     
-    const size_t NUM_TILES = (k + TILE_SIZE - 1) / TILE_SIZE;
+    const size_t NUM_TILES = CEIL_DIV(k, TILE_SIZE);
 
     float acc = 0.0f;
     for (size_t b = 0; b < NUM_TILES; b++) {
@@ -54,16 +54,20 @@ __global__ void smem_blocking(const float* __restrict__ A, const float* __restri
     *out = (beta == 0.0f) ? scaled : scaled + beta * (*out);
 }
 
+template <int TILE_SIZE>
 inline void gemm_smem_blocking(const float* A, const float* B, float* C, size_t m, size_t n, size_t k, bool trans_a,
                        bool trans_b, float alpha, float beta, cudaStream_t stream) {
+    static_assert(TILE_SIZE * TILE_SIZE <= 1024, "too many threads per block");
+    static_assert(2 * TILE_SIZE * TILE_SIZE * sizeof(float) <= 48 * 1024, "tiles exceed the 48KB static smem limit");
+
     if (m == 0 || n == 0) 
         return;
     
     // one thread per C element, one block per TILE_SIZE x TILE_SIZE tile of C
     const dim3 block(TILE_SIZE, TILE_SIZE);
 
-    const size_t grid_x = (n + TILE_SIZE - 1) / TILE_SIZE;
-    const size_t grid_y = (m + TILE_SIZE - 1) / TILE_SIZE;
+    const size_t grid_x = CEIL_DIV(n, TILE_SIZE);
+    const size_t grid_y = CEIL_DIV(m, TILE_SIZE);
     CUDL_CHECK(grid_y <= 65535, "gemm: m = " << m << " exceeds the grid's y limit");
 
     const dim3 grid(static_cast<unsigned>(grid_x), static_cast<unsigned>(grid_y));
@@ -71,7 +75,7 @@ inline void gemm_smem_blocking(const float* A, const float* B, float* C, size_t 
     const size_t smem_bytes = 0; // tiles are static __shared__ arrays
 
     dispatch_trans(trans_a, trans_b, [&](auto ta, auto tb) {
-        smem_blocking<decltype(ta)::value, decltype(tb)::value><<<grid, block, smem_bytes, stream>>>(A, B, C, m, n, k, alpha, beta);
+        smem_blocking<TILE_SIZE, decltype(ta)::value, decltype(tb)::value><<<grid, block, smem_bytes, stream>>>(A, B, C, m, n, k, alpha, beta);
     });
     CUDL_KERNEL_CHECK();
 }
