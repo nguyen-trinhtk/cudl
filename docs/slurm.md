@@ -43,7 +43,8 @@ Each job asks for one V100 on `gpu-sm` and can be submitted from any directory.
 | Script | Runs | Args go to | Time limit |
 |---|---|---|---|
 | `test.sbatch` | `ctest` | `ctest` | 30 min |
-| `bench.sbatch` | every bench binary except `bench_gemm` | each bench binary | 1 h |
+| `bench.sbatch` | every bench binary except `bench_gemm_tune` | each bench binary | 1 h |
+| `tune_gemm.sbatch` | `bench_gemm_tune` (GEMM tile sweep) | `bench_gemm_tune` | 30 min |
 | `profile.sbatch` | `scripts/profile.sh` | `profile.sh` | 30 min |
 | `train.sbatch` | `build/examples/mlp_mnist` | `mlp_mnist` | 30 min |
 
@@ -61,7 +62,7 @@ sbatch scripts/slurm/train.sbatch --optim sgd
 
 - Job log: `scripts/slurm/logs/<job-name>-<jobid>.out`. It starts with the node, commit and GPU, which shows exactly what ran.
 - If the job died before that, the error is in `slurm-<jobid>.out` in the directory the job was submitted from.
-- Bench results: `results/bench-<commit>-<jobid>.jsonl`, ready for [plotting](benchmarking.md#plotting-results).
+- Bench results: `results/bench-<commit>-<jobid>.jsonl` (`results/tune-gemm-...` for the sweep), ready for [plotting](benchmarking.md#plotting-results).
 - Profiles: `profiles/`.
 
 ## Interactive shell
