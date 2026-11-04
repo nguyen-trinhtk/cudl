@@ -14,7 +14,8 @@ namespace cudl::kernels {
 // Setting beta = 0 to ignore existing C-values
 
 // Variants:
-//  naive: each thread compute each Cij
+//  naive: each thread computes one Cij, threadIdx.x on rows, so global loads/stores aren't coalesced
+//  coalesced: naive with threadIdx.x on cols, so a warp reads/writes neighbouring elements of B and C
 //  smem: 32x32 tiles of A and B staged in shared memory, each thread still computes one Cij
 //  smem_1d: 64x64 C tile per block with 64x8 / 8x64 tiles of A and B, each thread computes 8 Cij in one column
 //  smem_2d: same tiles as smem_1d with 8x8 threads per block, each thread computes an 8x8 tile of Cij, A tile stored transposed

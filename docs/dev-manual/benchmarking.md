@@ -58,7 +58,7 @@ Each one has a filter flag (`--op`, `--algo`, `--load`) that takes a regex. Avai
 | `bench_reduce` | `sum` `max` | `atomic` `smem` `warp` | `scalar` `vec4` |
 | | `sum_rows` `max_rows` | `thread` `smem` `warp` | `scalar` |
 | | `sum_cols` `max_cols` | `thread` | `scalar` |
-| `bench_gemm` | `gemm` | `naive` `smem` `smem_1d` `smem_2d` | `scalar` `vec4` (`smem_2d` only) |
+| `bench_gemm` | `gemm` | `naive` `coalesced` `smem` `smem_1d` `smem_2d` | `scalar` `vec4` (`smem_2d` only) |
 | `bench_gemm_tune` | `gemm` | `smem_2d_<BM>x<BN>x<BK>_<TM>x<TN>` | `vec4` |
 | `bench_nn` | `cross_entropy_loss` | `warp` | `scalar` |
 | | `sgd` `adam` | none | `scalar` |
@@ -72,7 +72,7 @@ Filter rules:
 
 ### Tuning GEMM tile sizes
 
-`bench_gemm_tune` times the `smem_2d` vec4 kernel for every combination of BM, BN = 64, 128, 256, BK = 8, 16, 32 and TM, TN = 4, 8. Configs the kernel can't run, or with fewer than 64 threads, are skipped. Each config is checked against `naive` before it is timed, and a ranking by GFLOP/s is printed at the end. The default size is 4096.
+`bench_gemm_tune` times the `smem_2d` vec4 kernel for every combination of BM, BN = 64, 128, 256, BK = 8, 16, 32 and TM, TN = 4, 8. Configs the kernel can't run, or with fewer than 64 threads, are skipped. Each config is checked against `coalesced` before it is timed, and a ranking by GFLOP/s is printed at the end. The default size is 4096.
 
 ```sh
 build/bench/bench_gemm_tune --size 4096 --json tune.jsonl

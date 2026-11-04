@@ -17,3 +17,6 @@ results/
 
 # Datasets (run via `scripts/get_mnist.sh`)
 data/
+
+# Obsidian vault config
+.obsidian/

@@ -1,5 +1,5 @@
 // Times the smem_2d vec4 GEMM for every tile size config (BM, BN, BK, TM, TN) on square fp32 matrices.
-// Each config is first checked against the naive kernel, then timed. Prints a ranking by GFLOP/s at the end.
+// Each config is first checked against the coalesced naive kernel, then timed. Prints a ranking by GFLOP/s at the end.
 // --algo picks configs by name, e.g. --algo 'smem_2d_128x128x.*'; --size defaults to 4096.
 
 #include <algorithm>
@@ -113,8 +113,8 @@ int main(int argc, char** argv) {
         const double bytes = 3.0 * static_cast<double>(a.nbytes());
         const double flops = 2.0 * static_cast<double>(s) * s * s;
 
-        // Reference output from the naive kernel
-        registry<GemmFn>().get("gemm", "naive").fn(pa, pb, c_ref.data<float>(), us, us, us, false, false, 1.0f, 0.0f,
+        // Reference output from the coalesced naive kernel
+        registry<GemmFn>().get("gemm", "coalesced").fn(pa, pb, c_ref.data<float>(), us, us, us, false, false, 1.0f, 0.0f,
                                                    stream);
         std::vector<float> ref(numel), out(numel);
         CUDA_CHECK(cudaMemcpyAsync(ref.data(), c_ref.data<float>(), c_ref.nbytes(), cudaMemcpyDeviceToHost, stream));
@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
                 k.fn(pa, pb, pc, us, us, us, /*trans_a=*/false, /*trans_b=*/false, /*alpha=*/1.0f, /*beta=*/0.0f, st);
             };
 
-            // Check against naive before timing (allow small float rounding differences)
+            // Check against the reference before timing (allow small float rounding differences)
             CUDA_CHECK(cudaMemsetAsync(pc, 0xff, c.nbytes(), stream));  // fill with NaN so missed outputs fail
             launch(stream);
             CUDA_CHECK(cudaMemcpyAsync(out.data(), pc, c.nbytes(), cudaMemcpyDeviceToHost, stream));

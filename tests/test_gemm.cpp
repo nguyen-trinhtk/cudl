@@ -68,9 +68,19 @@ const std::vector<Scalars> kScalars{{1.0f, 0.0f}, {1.0f, 1.0f}, {0.5f, -2.0f}, {
 const std::vector<size_t> kOffsets{0, 1};
 const std::vector<std::pair<bool, bool>> kTrans{{false, false}, {true, false}, {false, true}, {true, true}};
 
-// fp32 dot-product error grows with K (inputs are in [-1, 1])
+// Pass iff |err| <= gamma_{k+2} * scale for every element, scale = |alpha||A||B| + |beta||C|: the worst-case fp32
+// rounding bound for any summation order (see ref::gemm_error_scale), so no atol / magic numbers are needed
 test::Tolerance gemm_tolerance(size_t k) {
-    return {1e-6 * static_cast<double>(k + 1), 1e-5, -1};
+    return {0.0, ref::gamma_f32(k + 2), -1};
+}
+
+// Checks a GEMM result against the reference under the rounding bound above
+::testing::AssertionResult GemmClose(const std::vector<float>& actual, const std::vector<float>& a,
+                                     const std::vector<float>& b, const std::vector<float>& c, size_t m, size_t n,
+                                     size_t k, bool trans_a, bool trans_b, float alpha, float beta) {
+    const auto expected = ref::gemm(a, b, c, m, n, k, trans_a, trans_b, alpha, beta);
+    const auto scale = ref::gemm_error_scale(a, b, c, m, n, k, trans_a, trans_b, alpha, beta);
+    return test::AllClose(actual, expected, scale, gemm_tolerance(k));
 }
 
 // (variant, shape, (trans_a, trans_b), (alpha, beta), offset)
@@ -115,8 +125,7 @@ TEST_P(GemmKernelTest, MatchesReferenceWithoutOverrun) {
     kernel(a.data(), b.data(), c.data(), s.m, s.n, s.k, trans_a, trans_b, ab.alpha, ab.beta, Context::get().stream());
     Context::get().synchronize();
 
-    const auto expected = ref::gemm(host_a, host_b, host_c, s.m, s.n, s.k, trans_a, trans_b, ab.alpha, ab.beta);
-    EXPECT_TRUE(test::AllClose(c.body(), expected, gemm_tolerance(s.k)));
+    EXPECT_TRUE(GemmClose(c.body(), host_a, host_b, host_c, s.m, s.n, s.k, trans_a, trans_b, ab.alpha, ab.beta));
     EXPECT_TRUE(c.guards_intact());
 }
 
@@ -151,8 +160,7 @@ TEST_P(GemmBetaZeroTest, IgnoresNaNInC) {
     kernel(a.data(), b.data(), c.data(), s.m, s.n, s.k, false, false, 1.5f, 0.0f, Context::get().stream());
     Context::get().synchronize();
 
-    const auto expected = ref::gemm(host_a, host_b, host_c, s.m, s.n, s.k, false, false, 1.5f, 0.0f);
-    EXPECT_TRUE(test::AllClose(c.body(), expected, gemm_tolerance(s.k)));
+    EXPECT_TRUE(GemmClose(c.body(), host_a, host_b, host_c, s.m, s.n, s.k, false, false, 1.5f, 0.0f));
     EXPECT_TRUE(c.guards_intact());
 }
 
@@ -192,8 +200,7 @@ TEST_P(GemmMixedAlignmentTest, MatchesReferenceWithoutOverrun) {
     kernel(a.data(), b.data(), c.data(), s.m, s.n, s.k, false, false, alpha, beta, Context::get().stream());
     Context::get().synchronize();
 
-    const auto expected = ref::gemm(host_a, host_b, host_c, s.m, s.n, s.k, false, false, alpha, beta);
-    EXPECT_TRUE(test::AllClose(c.body(), expected, gemm_tolerance(s.k)));
+    EXPECT_TRUE(GemmClose(c.body(), host_a, host_b, host_c, s.m, s.n, s.k, false, false, alpha, beta));
     EXPECT_TRUE(c.guards_intact());
 }
 
@@ -204,9 +211,8 @@ INSTANTIATE_TEST_SUITE_P(AllVariants, GemmMixedAlignmentTest,
 
 // ---------------------------------------------------------------------------- accumulation stress
 
-// Long K piles up the most fp32 rounding. Every element must stay under the worst-case dot-product bound
-// |err| <= (k + 2) * u * sum_i |a_i * b_i|, u = 2^-24 (k products and adds, plus the alpha / beta step), which holds
-// for any summation order. Positive inputs don't cancel, so the result and its error grow with k.
+// Long K piles up the most fp32 rounding, so this is where the gamma_{k+2} * sum |a_i b_i| bound is tightest.
+// Positive inputs don't cancel, so the result and its error grow with k.
 struct StressCase {
     Shape shape;
     bool positive;  // inputs in [0, 1] instead of [-1, 1]
@@ -219,16 +225,8 @@ const std::vector<StressCase> kStress{{{32, 32, 1 << 17}, false},
 
 struct StressData {
     std::vector<float> a, b;
-    std::vector<double> expected, bound;
+    std::vector<double> expected, scale;
 };
-
-std::vector<float> abs_values(const std::vector<float>& x) {
-    std::vector<float> out(x.size());
-    for (size_t i = 0; i < x.size(); ++i) {
-        out[i] = std::fabs(x[i]);
-    }
-    return out;
-}
 
 // The CPU reference is O(mnk), so each case is built once and shared by every kernel in one process
 // (ctest still rebuilds it per test, ~1 s each)
@@ -246,15 +244,8 @@ const StressData& stress_data(size_t idx) {
     d.expected = ref::gemm(d.a, d.b, zero_c, s.m, s.n, s.k, false, false, 1.0f, 0.0f);
 
     // sum |a * b| is the result itself when nothing is negative
-    std::vector<double> abs_dot = d.expected;
-    if (!positive) {
-        abs_dot = ref::gemm(abs_values(d.a), abs_values(d.b), zero_c, s.m, s.n, s.k, false, false, 1.0f, 0.0f);
-    }
-    const double gamma = static_cast<double>(s.k + 2) * std::ldexp(1.0, -24);
-    d.bound.resize(abs_dot.size());
-    for (size_t i = 0; i < abs_dot.size(); ++i) {
-        d.bound[i] = gamma * abs_dot[i];
-    }
+    d.scale = positive ? d.expected
+                       : ref::gemm_error_scale(d.a, d.b, zero_c, s.m, s.n, s.k, false, false, 1.0f, 0.0f);
     return cache.emplace(idx, std::move(d)).first->second;
 }
 
@@ -279,24 +270,12 @@ TEST_P(GemmAccumStressTest, StaysUnderDotProductBound) {
                        Context::get().stream());
     Context::get().synchronize();
 
-    // Worst err / bound over all elements; NaN counts as unbounded
+    // max_rel is max err / sum|a b|; dividing by gamma gives how much of the worst-case bound is used
     const auto out = c.body();
-    double worst = 0.0;
-    size_t worst_i = 0;
-    for (size_t i = 0; i < out.size(); ++i) {
-        const double err = std::fabs(static_cast<double>(out[i]) - d.expected[i]);
-        double ratio = err == 0.0 ? 0.0 : err / d.bound[i];
-        if (std::isnan(ratio)) {
-            ratio = std::numeric_limits<double>::infinity();
-        }
-        if (ratio > worst) {
-            worst = ratio;
-            worst_i = i;
-        }
-    }
-    std::printf("[ info ] max err/bound %.3e at [%zu] (actual %.9g, expected %.9g)\n", worst, worst_i, out[worst_i],
-                d.expected[worst_i]);
-    EXPECT_LE(worst, 1.0) << "element " << worst_i << " exceeds the (k + 2) u sum|a b| bound";
+    const test::Tolerance tol = gemm_tolerance(s.k);
+    const test::CompareReport r = test::compare(out.data(), d.expected.data(), out.size(), tol, d.scale.data());
+    std::printf("[ info ] max err/bound %.3e  %s\n", r.max_rel / tol.rtol, r.summary().c_str());
+    EXPECT_TRUE(r.ok()) << r.summary() << " exceeds the gamma_{k+2} sum|a b| bound";
     EXPECT_TRUE(c.guards_intact());
 }
 
