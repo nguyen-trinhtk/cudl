@@ -42,6 +42,9 @@ Running the binary directly is faster when iterating on one thing, and it prints
 | Suite | Checks |
 |---|---|
 | `*KernelTest`, `*EdgeTest` | each variant vs a CPU reference in `tests/ref/`, incl. odd sizes and misaligned pointers |
+| `TileConfigs/GemmKernelTest` | extra GEMM tile configs (`tests/gemm_configs.cu`, test-only, not registered) on the same shapes |
+| `GemmMixedAlignmentTest` | one GEMM operand misaligned, vec4 kernels must fall back to scalar |
+| `GemmAccumStressTest` | big-K GEMM (up to k = 2^17), every element under the fp32 dot-product bound `(k+2) * 2^-24 * sum|a*b|`; prints err/bound |
 | `ReduceDeterminism` | same input gives bit-identical results every run (`sum`/`atomic` uses float atomics, so it's only reported) |
 | `ReduceDrift` | sum error vs N per variant; tree reductions (`smem`, `warp`) must stay under 1e-5 |
 | `LinearTest`, `Gradcheck` | layer forward/backward vs CPU, gradients vs finite differences |

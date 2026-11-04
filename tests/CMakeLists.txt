@@ -17,10 +17,14 @@ add_executable(cudl_tests
     test_elementwise.cpp
     test_reduce.cpp
     test_gemm.cpp
+    gemm_configs.cu
     test_loss.cpp
     test_optim.cpp
     test_nn.cpp)
 target_link_libraries(cudl_tests PRIVATE cudl_testing GTest::gtest_main)
+# gemm_configs.cu instantiates the kernel templates from src/kernels/gemm/ directly
+target_include_directories(cudl_tests PRIVATE ${PROJECT_SOURCE_DIR}/src/kernels)
+target_compile_options(cudl_tests PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--expt-relaxed-constexpr>)
 
 include(GoogleTest)
 # PRE_TEST: list tests when ctest runs, so building doesn't need a GPU.
